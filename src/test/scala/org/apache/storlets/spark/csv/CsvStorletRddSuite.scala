@@ -33,17 +33,15 @@ import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.StoredObject;
 
-import org.apache.storlets.spark.StorletConf;
-import org.apache.storlets.spark.csv.StorletCsvContext
+import org.apache.storlets.spark.csv.{StorletCsvContext, StorletCsvConf}
 
-class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter {
+class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var props: Properties = new Properties();
   var containerName: String = UUID.randomUUID().toString();
   var account: Account = null
   var container: Container = null
-  var sconf: StorletConf = null
-  var testFilePath: String = null
-  val testFileName = "records.txt"
+  var sconf: StorletCsvConf = null
+  val testFileNames: List[String] = List("records.txt","meter-small-1M.csv","meter-1M.csv")
   var sc: SparkContext = null
 
   def uploadTestFile(name: String) {
@@ -55,69 +53,78 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter {
     sobject.exists();
   }
 
-  before {
+  override protected def beforeAll() {
     val url = getClass.getResource("/joss.properties")
     props.load(new FileInputStream(url.getFile()))
 
     val config = new AccountConfig();
     config.setUsername(props.getProperty("joss.account.user"));
     config.setPassword(props.getProperty("joss.account.password"));
-    config.setAuthUrl(props.getProperty("loss.auth.url"));
+    config.setAuthUrl(props.getProperty("joss.auth.url"));
     config.setTenantName(props.getProperty("joss.account.tenant"));
     config.setMock(false);
     account = new AccountFactory(config).createAccount();
 
-    sconf = new StorletConf()
-      .set("swift.storlets.partitions","3")
-      .set("storlets.swift.username", props.getProperty("joss.account.user"))
-      .set("storlets.swift.password", props.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", props.getProperty("loss.auth.url"))
-      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
-      .set("storlets.csv.max_record_len", "80")
 
     // Create a temp container
-    containerName = UUID.randomUUID().toString();
     container = account.getContainer(containerName);
     container.create();
     container.exists();
 
     // Upload file for tests
-    uploadTestFile(testFileName)
+    for (name <- testFileNames) uploadTestFile(name)
 
-    testFilePath = containerName + "/" + testFileName
   }
 
-  after {
+  override protected def afterAll() {
     val objects = container.list();
     for (currentObject <- objects)
         currentObject.delete()
     container.delete();
+  }
+
+  before {
+    val conf = new SparkConf()
+      .set("storlets.swift.username", props.getProperty("joss.account.user"))
+      .set("storlets.swift.password", props.getProperty("joss.account.password"))
+      .set("storlets.swift.auth.url", props.getProperty("joss.auth.url"))
+      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
+      .set("swift.storlets.partitioning.method","partitions")
+      .set("swift.storlets.partitioning.partitions","3")
+    sconf = new StorletCsvConf(conf, "80", ',', '#', "'".head, '/')
+  }
+
+  after {
     sc.stop
   }
 
   test("num partitions") {
+    val testFilePath = containerName + "/records.txt"
     val conf = new SparkConf()
       .setAppName("CsvStorletRddSuite")
       .setMaster("local[2]") // 2 threads, some parallelism
 
     sc = new SparkContext(conf)
 
-    val storletCtx = new StorletCsvContext(sconf, testFilePath, ' ', '#', ''', '/') 
+    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
-    rdd.numPartitions(12, 12000, 1000) shouldBe 12
-    rdd.numPartitions(12, 12001, 1000) shouldBe 12
-    rdd.numPartitions(12, 12000, 2000) shouldBe 6
-    rdd.numPartitions(12, 12001, 2000) shouldBe 7
+    rdd.numPartitions(100, 12000) shouldBe 120
+    rdd.numPartitions(100, 12001) shouldBe 121
+    rdd.numPartitions(1024, 2048) shouldBe 2
+    rdd.numPartitions(1024, 2047) shouldBe 2
     sc.stop()
   }
 
   test("Boundaries") {
+    val testFilePath = containerName + "/records.txt"
     val conf = new SparkConf()
       .setAppName("CsvStorletRddSuite")
       .setMaster("local[2]") // 2 threads, some parallelism
 
     sc = new SparkContext(conf)
-    val storletCtx = new StorletCsvContext(sconf, testFilePath, ' ', '#', ''', '/') 
+    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     var boundaries = rdd.partitionBoundaries(12, 0, 12000)
     for (i <- 0 to 11) {
@@ -138,41 +145,12 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter {
 
   test("getPartitions with user defined number") {
     // Additional test for cores...
+    val testFilePath = containerName + "/records.txt"
     val conf = createConf
-
     sc = new SparkContext(conf)
 
-    val storletCtx = new StorletCsvContext(sconf, testFilePath, ' ', '#', ''', '/') 
-    var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
-    val partitions = rdd.getPartitions
-    partitions(0).asInstanceOf[CsvStorletPartition].index shouldBe 0
-    partitions(0).asInstanceOf[CsvStorletPartition].start shouldBe 12
-    partitions(0).asInstanceOf[CsvStorletPartition].end shouldBe 267
-    partitions(1).asInstanceOf[CsvStorletPartition].index shouldBe 1
-    partitions(1).asInstanceOf[CsvStorletPartition].start shouldBe 268
-    partitions(1).asInstanceOf[CsvStorletPartition].end shouldBe 523
-    partitions(2).asInstanceOf[CsvStorletPartition].index shouldBe 2
-    partitions(2).asInstanceOf[CsvStorletPartition].start shouldBe 524
-    partitions(2).asInstanceOf[CsvStorletPartition].end shouldBe 779
-  }
-
-  test("getPartitions with cores") {
-    val conf = new SparkConf()
-      .setAppName("CsvStorletRddSuite")
-      .setMaster("local[2]") // 2 threads, some parallelism
-      .set("storlets.swift.replication.factor","3")
-      .set("storlets.swift.node.cores","1")
-      .set("storlets.minchunk", "100")
-      .set("storlets.swift.username", props.getProperty("joss.account.user"))
-      .set("storlets.swift.password", props.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", props.getProperty("loss.auth.url"))
-      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
-      .set("storlets.csv.max_record_len","80");
-    // Additional test for cores...
-
-    sc = new SparkContext(conf)
-
-    val storletCtx = new StorletCsvContext(sconf, testFilePath, ' ', '#', ''', '/') 
+    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     val partitions = rdd.getPartitions
     partitions(0).asInstanceOf[CsvStorletPartition].index shouldBe 0
@@ -187,9 +165,12 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter {
   }
 
   test("Test records complete reading from record.txt") {
+    val testFilePath = containerName + "/records.txt"
     val conf = createConf
     sc = new SparkContext(conf)
-    val storletCtx = new StorletCsvContext(sconf, testFilePath, ' ', '#', ''', '/') 
+    sconf.set("storlets.csv.max_record_len", "80")
+         .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     assert(rdd.count === 52)
   }
@@ -198,27 +179,41 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter {
     val testFile = "meter-small-1M.csv"
     val conf = createConf
     sc = new SparkContext(conf)
-    uploadTestFile(testFile)
-    val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile , ' ', '#', ''', '/') 
+    sconf.set("storlets.csv.max_record_len", "80")
+         .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     assert(rdd.count === 9305)
   }
 
-//  test("Test records complete reading from meter-small.csv via map-partitions") {
-//    val conf = createConf
-//    sc = new SparkContext(conf)
-//    uploadTestFile("meter-small.csv")
-//    val storletCtx = new StorletCsvContext(sconf, containerName + "/meter-small.csv" , ' ', '#', ''', '/') 
-//    var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
+  test("Test records reading from meter-1MB.csv") {
+    val testFile = "meter-1M.csv"
+    val conf = createConf
+    sconf.set("storlets.csv.max_record_len", "256")
+         .set("storlets.csv.storlet.name","csvstorlet-1.0.jar")
+    sc = new SparkContext(conf)
+    val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile)
+    var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "4,6", "EqualTo(6,FRA)")(storletCtx)
+    assert(rdd.count === 1070)
+  }
 
-//    var counter: Int = 0
-//    rdd.mapPartitions { iter =>
-//      iter.flatMap { line  =>
-//        counter = counter + 1
-//        None
-//      }
-//      iter
-//    }
-//    assert(counter === 727227)
-//  }
+  test("Test records complete reading from meter-small.csv via map-partitions") {
+    val testFile = "meter-1M.csv"
+    val conf = createConf
+    sc = new SparkContext(conf)
+    sconf.set("storlets.csv.max_record_len", "256")
+         .set("storlets.csv.storlet.name","csvstorlet-1.0.jar")
+    val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile) 
+    var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
+
+    var counter: Int = 0
+    val res = rdd.mapPartitionsWithIndex {
+      (index, iter) => {
+        val myList = iter.toList
+        myList.map(x => x + " -> " + index).iterator
+      }
+    }
+    assert(res.count === 9305)
+  }
+
 }

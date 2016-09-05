@@ -40,7 +40,8 @@ import org.javaswift.joss.model.StoredObject;
 import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.headers.object.range.FirstPartRange;
 
-import org.apache.storlets.spark.StorletConf;
+import org.apache.spark.SparkConf;
+import org.apache.storlets.spark.csv.StorletCsvConf;
 
 public class CsvClientUtilSuite {
 
@@ -48,7 +49,7 @@ public class CsvClientUtilSuite {
   private Properties m_prop;
   private Container m_container;
   private String m_containerName;
-  private StorletConf m_sconf;
+  private StorletCsvConf m_sconf;
   private URL m_url;
 
   @Before
@@ -64,16 +65,21 @@ public class CsvClientUtilSuite {
      Assert.assertNotNull(null);   
     }
 
-    m_sconf = new StorletConf()
+    SparkConf conf = new SparkConf()
       .set("storlets.swift.username", m_prop.getProperty("joss.account.user"))
       .set("storlets.swift.password", m_prop.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", m_prop.getProperty("loss.auth.url"))
-      .set("storlets.swift.tenantname", m_prop.getProperty("joss.account.tenant"));
+      .set("storlets.swift.auth.url", m_prop.getProperty("joss.auth.url"))
+      .set("storlets.swift.tenantname", m_prop.getProperty("joss.account.tenant"))
+      .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+      .set("swift.storlets.partitioning.method","partitions")
+      .set("swift.storlets.partitioning.partitions","5");
+
+    m_sconf = new StorletCsvConf(conf, "80",',','#', "'".charAt(0), '/');
 
     AccountConfig config = new AccountConfig();
     config.setUsername(m_prop.getProperty("joss.account.user"));
     config.setPassword(m_prop.getProperty("joss.account.password"));
-    config.setAuthUrl(m_prop.getProperty("loss.auth.url"));
+    config.setAuthUrl(m_prop.getProperty("joss.auth.url"));
     config.setTenantName(m_prop.getProperty("joss.account.tenant"));
     config.setMock(false);
     m_account = new AccountFactory(config).createAccount();
@@ -133,7 +139,7 @@ public class CsvClientUtilSuite {
   public void testStorletCsvContext() {
     uploadTestFile("cars.csv");  
     String path = String.format("%s/%s", m_containerName, "cars.csv");
-    StorletCsvContext ctx = new StorletCsvContext(m_sconf, path, ' ', new Character('#'), new Character('\''), new Character('/'));
+    StorletCsvContext ctx = new StorletCsvContext(m_sconf, path);
     Assert.assertNotNull(ctx);
     Assert.assertEquals("object size", 134, ctx.getObjectSize());
     StorletCsvFirstLine line = ctx.getFirstLine();

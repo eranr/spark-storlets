@@ -28,6 +28,7 @@ class StorletCsvConf(conf: SparkConf,
                      escape: Character,
                      comment: Character) extends StorletConf(conf) {
   // The below are expected in every instance of Storlet CSV conf
+  settings.put("storlets.csv.header.maxoffset", conf.get("storlets.csv.header.maxoffset","1024"));
   settings.put("storlets.csv.max_record_len", conf.get("storlets.csv.max_record_len",max_record_len))
   settings.put("storlets.csv.delimiter",conf.get("storlets.csv.delimiter", delimiter.toString))
   settings.put("storlets.csv.comment",conf.get("storlets.csv.comment", comment.toString))

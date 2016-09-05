@@ -13,9 +13,8 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 
 import org.apache.storlets.spark.StorletConf
+import org.apache.storlets.spark.csv.{StorletCsvConf, StorletCsvContext}
 import org.apache.storlets.spark.csv.util.{ParseModes, TypeCast, InferSchema}
-
-import org.apache.storlets.spark.csv.StorletCsvContext
 
 case class StorletCsvRelation protected[spark] (
     charset: String, 
@@ -46,31 +45,18 @@ case class StorletCsvRelation protected[spark] (
   private val permissive = ParseModes.isPermissiveMode(parseMode)
 
   private val storletConf = getStorletConf
-  // TODO: Rename StorletContext to StorletCsvContext
-  @transient private val storletCtx = new StorletCsvContext(storletConf,
-                                                            location,
-                                                            delimiter,
-                                                            comment,
-                                                            quote,
-                                                            escape)
+  @transient private val storletCsvCtx = new StorletCsvContext(storletConf,
+                                                               location)
 
   val defaultCsvFormat =
     CSVFormat.DEFAULT.withRecordSeparator(System.getProperty("line.separator", "\n"))
 
   override val schema: StructType = inferSchema()
 
-  def getStorletConf(): StorletConf = {
+  private def getStorletConf(): StorletConf = {
     val conf = sqlContext.sparkContext.getConf
-    new StorletConf()
-      .set("swift.storlets.partitions", conf.get("swift.storlets.partitions","0"))
-      .set("storlets.swift.replication.factor", conf.get("storlets.swift.replication.factor","3"))
-      .set("storlets.swift.node.cores", conf.get("storlets.swift.node.cores","4"))
-      .set("storlets.minchunk", conf.get("storlets.minchunk","134217728"))
-      .set("storlets.csv.max_record_len", conf.get("storlets.csv.max_record_len","80"))
-      .set("storlets.swift.username", conf.get("storlets.swift.username"))
-      .set("storlets.swift.password", conf.get("storlets.swift.password"))
-      .set("storlets.swift.auth.url", conf.get("storlets.swift.auth.url"))
-      .set("storlets.swift.tenantname", conf.get("storlets.swift.tenantname"))
+    val sconf = new StorletCsvConf(conf, "512", delimiter, quote, escape, comment)
+    sconf.set("storlets.csv.storlet.name", conf.get("storlets.csv.storlet.name", "partitionsidentitystorlet-1.0.jar"))
   }
 
   private def tokenRdd(header: Array[String],
@@ -79,7 +65,7 @@ case class StorletCsvRelation protected[spark] (
     val csvStorletRdd = new CsvStorletRdd(sqlContext.sparkContext,
                                           storletConf,
                                           selectedColumns,
-                                          whereClause)(storletCtx)
+                                          whereClause)(storletCsvCtx)
     val csvFormat = defaultCsvFormat
         .withDelimiter(delimiter)
         .withQuote(quote)
@@ -175,13 +161,6 @@ case class StorletCsvRelation protected[spark] (
     if (shouldTableScan) {
       buildScan
     } else {
-      val safeRequiredIndices = new Array[Int](safeRequiredFields.length)
-      schemaFields.zipWithIndex.filter {
-        case (field, _) => safeRequiredFields.contains(field)
-      }.foreach {
-        case (field, index) => safeRequiredIndices(safeRequiredFields.indexOf(field)) = index
-      }
-      val requiredSize = requiredFields.length
       tokenRdd(schemaFields.map(_.name),
                columnsString, 
                filtersString).flatMap { tokens =>
@@ -192,30 +171,21 @@ case class StorletCsvRelation protected[spark] (
           throw new RuntimeException(s"Malformed line in FAILFAST mode: " +
             s"${tokens.mkString(delimiter.toString)}")
         } else {
-          val indexSafeTokens = if (permissive && schemaFields.length > tokens.length) {
-            tokens ++ new Array[String](schemaFields.length - tokens.length)
-          } else if (permissive && schemaFields.length < tokens.length) {
-            tokens.take(schemaFields.length)
-          } else {
-            tokens
-          }
+          var index: Int = 0
           try {
-            var index: Int = 0
-            var subIndex: Int = 0
-            while (subIndex < safeRequiredIndices.length) {
-              index = safeRequiredIndices(subIndex)
-              val field = schemaFields(index)
-              rowArray(subIndex) = TypeCast.castTo(
-                indexSafeTokens(index),
+            while (index < requiredFields.length) {
+              val field = requiredFields(index)
+              rowArray(index) = TypeCast.castTo(
+                tokens(index),
                 field.dataType,
                 field.nullable,
                 treatEmptyValuesAsNulls,
                 nullValue,
                 simpleDateFormatter
               )
-              subIndex = subIndex + 1
+              index = index + 1
             }
-            Some(Row.fromSeq(rowArray.take(requiredSize)))
+            Some(Row.fromSeq(rowArray))
           } catch {
             case _: java.lang.NumberFormatException |
                  _: IllegalArgumentException if dropMalformed =>
@@ -280,7 +250,7 @@ case class StorletCsvRelation protected[spark] (
    * Returns the first line of the file
    */
   private lazy val firstLine = {
-    storletCtx.getFirstLine().getLine().split(delimiter.toString())
+    storletCsvCtx.getFirstLine().getLine().split(delimiter.toString())
   }
 
 }

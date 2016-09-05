@@ -33,17 +33,13 @@ import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.StoredObject;
 
-import org.apache.storlets.spark.StorletConf;
-
-class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter {
+class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfterAll with BeforeAndAfter {
   var props: Properties = new Properties();
   var containerName: String = UUID.randomUUID().toString();
   var account: Account = null
   var container: Container = null
-  var sconf: StorletConf = null
   var testFilePath: String = null
   var sparkConf: SparkConf = null
-  //val testFileName = "meter-small-1M.csv"
   val testFileName = "meter-1M.csv"
   var sc: SparkContext = null
 
@@ -56,29 +52,19 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     sobject.exists();
   }
 
-  before {
+  override protected def beforeAll() {
     val url = getClass.getResource("/joss.properties")
     props.load(new FileInputStream(url.getFile()))
 
     val config = new AccountConfig();
     config.setUsername(props.getProperty("joss.account.user"));
     config.setPassword(props.getProperty("joss.account.password"));
-    config.setAuthUrl(props.getProperty("loss.auth.url"));
+    config.setAuthUrl(props.getProperty("joss.auth.url"));
     config.setTenantName(props.getProperty("joss.account.tenant"));
     config.setMock(false);
     account = new AccountFactory(config).createAccount();
 
-    sparkConf = new SparkConf()
-      .setAppName("StorletCsvRelationSuite")
-      .setMaster("local[2]") // 2 threads, some parallelism
-      .set("swift.storlets.partitions","3")
-      .set("storlets.swift.username", props.getProperty("joss.account.user"))
-      .set("storlets.swift.password", props.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", props.getProperty("loss.auth.url"))
-      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
-
     // Create a temp container
-    containerName = UUID.randomUUID().toString();
     container = account.getContainer(containerName);
     container.create();
     container.exists();
@@ -87,18 +73,52 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     uploadTestFile(testFileName)
 
     testFilePath = containerName + "/" + testFileName
-    sc = new SparkContext(sparkConf)
+
   }
 
-  after {
+  override protected def afterAll() {
     val objects = container.list();
     for (currentObject <- objects)
         currentObject.delete()
     container.delete();
+  }
+
+  before {
+    sparkConf = new SparkConf()
+      .setAppName("StorletCsvRelationSuite")
+      .setMaster("local[2]") // 2 threads, some parallelism
+      .set("swift.storlets.partitioning.method","partitions")
+      .set("swift.storlets.partitioning.partitions","3")
+      .set("storlets.swift.username", props.getProperty("joss.account.user"))
+      .set("storlets.swift.password", props.getProperty("joss.account.password"))
+      .set("storlets.swift.auth.url", props.getProperty("joss.auth.url"))
+      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
+      .set("storlets.csv.delimiter", " ")
+      .set("storlets.csv.comment", "#")
+      .set("storlets.csv.quote", "'")
+      .set("storlets.csv.escape", "/");
+
+  }
+
+  after {
     sc.stop
   }
 
-  test("StorletCsvRelation") {
+  test("StorletCsvRelation with csvstorlet-1.0.jar and partitions") {
+    sparkConf.set("storlets.csv.storlet.name", "csvstorlet-1.0.jar")
+    sc = new SparkContext(sparkConf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))
+    df.registerTempTable("data")
+    val res = sqlContext.sql("select count(vid) from data where (state like 'FRA')")
+    assert(res.collectAsList()(0)(0) === 1070)
+  }
+
+  test("StorletCsvRelation with csvstorlet-1.0.jar and chunks") {
+    sparkConf.set("storlets.csv.storlet.name", "csvstorlet-1.0.jar")
+      .set("swift.storlets.partitioning.method","chunks")
+      .set("swift.storlets.partitioning.chunksize","1")
+    sc = new SparkContext(sparkConf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))
     df.registerTempTable("data")

@@ -45,9 +45,6 @@ public class StorletCsvContext {
   private static final Logger log = LoggerFactory.getLogger(StorletCsvContext.class);
 
   private Character comment;
-  private char delimiter;
-  private Character quote;
-  private Character escape;
   private Account account;
   private Container container;
   private StoredObject sobject;
@@ -55,27 +52,16 @@ public class StorletCsvContext {
   private long objectSize;
   private String containerName;
   private String objectName;
-  private String storletName;
   private int maxOffset;
-  private int max_record_len;
 
   /*
    * objPath is assumed to be of the form containerName.objectName
    * commant is a string containing the file's comment symbol
    */
   public StorletCsvContext(StorletConf conf,
-                           String objPath,
-                           char delimiter,
-                           Character comment,
-                           Character quote,
-                           Character escape) {
-    this.maxOffset = Integer.parseInt(conf.get("storlets.csv.header.maxoffset","1024"));
-    this.storletName = conf.get("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar");
-    this.max_record_len = Integer.parseInt(conf.get("storlets.csv.max_record_len", "80"));
-    this.delimiter = delimiter;
-    this.comment = comment;
-    this.quote = quote;
-    this.escape = escape;
+                           String objPath) {
+    this.maxOffset = Integer.parseInt(conf.get("storlets.csv.header.maxoffset"));
+    this.comment = conf.get("storlets.csv.comment").charAt(0);
 
     try {
         account = StorletCsvUtils.getAccount(conf);
@@ -103,10 +89,6 @@ public class StorletCsvContext {
     return firstLine;
   }
 
-  public String getStorletName() {
-    return storletName;
-  }
-
   public String getObjectName() {
     return objectName;
   }
@@ -115,19 +97,4 @@ public class StorletCsvContext {
     return containerName;
   }
 
-  public char getDelimiterChar() {
-    return delimiter;
-  }
-
-  public Character getCommentChar() {
-    return comment;
-  }
-
-  public Character getQuoteChar() {
-    return quote;
-  }
-
-  public Character getEscapeChar() {
-    return escape;
-  }
 }

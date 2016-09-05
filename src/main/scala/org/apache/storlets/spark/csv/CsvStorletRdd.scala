@@ -44,7 +44,7 @@ private[storlets] class CsvStorletPartition(idx: Int, val start: Long, val end: 
  *
  * @param sc The SparkContext to associate the RDD with.
  * @param sconf
- *    The StorletConf is assumed to hold:
+ *    A Storlet CsvConf instance holding
  *    (1) the information needed to connect to Swift.
  *    (2) the swift related configuration for determining
  *    the amount of partitions.
@@ -63,38 +63,18 @@ class CsvStorletRdd(
     whereClause: String)(@transient val storletCsvCtx: StorletCsvContext)
   extends RDD[String](sc, Nil) with Logging {
 
-  private val delimiter = storletCsvCtx.getDelimiterChar();
-  private val comment = storletCsvCtx.getCommentChar();
-  private val quote = storletCsvCtx.getQuoteChar();
-  private val escape = storletCsvCtx.getEscapeChar();
-  private val maxRecordLen = sconf.get("storlets.csv.max_record_len", "80").toInt
+  private val delimiter = sconf.get("storlets.csv.delimiter");
+  private val comment = sconf.get("storlets.csv.comment").head;
+  private val quote = sconf.get("storlets.csv.quote").head;
+  private val escape = sconf.get("storlets.csv.escape").head;
+  private val maxRecordLen = sconf.get("storlets.csv.max_record_len").toInt
+  private val storletName = sconf.get("storlets.csv.storlet.name")
 
-  def numPartitions(totalCores: Int,
-                    objectDataSize: Long,
-                    minChunkSize: Int) : Int = {
-    /* Determine the number of partitions so that we do not
-     * stress the object store with too many requests.
-     * The below is for a single object. When we support more then
-     * one object, this needs to be changed.
-     * Ideally the maximum number of requests per object should not exceed
-     * the total number of cores we can devote, which is:
-     * replication factor * cores in node
-     * The user can also specify the minimal chunk size so as to
-     * upper bound the number of allocated tasks.
-     * If the object size divided by the total number of cores gives
-     * a chunk size that is smaller then the min chunk size, then
-     * the number of partitions will be determined by the minimal
-     * chunk size.
-     * The user can ocverride all of the above by setting
-     * swift.storlets.partitions to a value greater then zero.
-     */
-    val partByChunkSize_ = objectDataSize / minChunkSize
-    val partByChunkSize = if (objectDataSize % minChunkSize == 0) partByChunkSize_ else partByChunkSize_ + 1
-
-    if (objectDataSize / totalCores < minChunkSize)
-      partByChunkSize.toInt
-    else
-      totalCores
+  def numPartitions(chunkSize: Int,
+                    objectDataSize: Long) : Int = {
+    val partByChunkSize_ = (objectDataSize / chunkSize).toInt
+    var partByChunkSize: Int = if (objectDataSize % chunkSize == 0) partByChunkSize_ else partByChunkSize_ + 1
+    partByChunkSize
   }
 
   def partitionBoundaries(numPartitions: Int,
@@ -116,15 +96,14 @@ class CsvStorletRdd(
   override def getPartitions: Array[Partition] = {
     val objectDataSize: Long = storletCsvCtx.getObjectSize() - storletCsvCtx.getFirstLine().getOffset()
 
-    val replicationFactor: Int = sconf.get("storlets.swift.replication.factor", "3").toInt
-    val nodeCores: Int = sconf.get("storlets.swift.node.cores", "4").toInt
-    val minChunkSize: Int = sconf.get("storlets.minchunk", "134217728").toInt // 128 MB
-    val totalCores = replicationFactor * nodeCores
-    val userPartitions: Int = sconf.get("swift.storlets.partitions", "0").toInt
-    val partitions = if (userPartitions > 0)
-      userPartitions
-    else
-      numPartitions(totalCores, objectDataSize, minChunkSize)
+    val partitioningMethod: String = sconf.get("swift.storlets.partitioning.method")
+    val partitions = if (partitioningMethod == "partitions")
+      sconf.get("swift.storlets.partitioning.partitions").toInt
+    else {
+      var chunkSize: Int = 1024*1024*sconf.get("swift.storlets.partitioning.chunksize").toInt
+      numPartitions(chunkSize,
+                    objectDataSize)
+    }
     
     val boundaries = partitionBoundaries(partitions,
                                          storletCsvCtx.getFirstLine().getOffset(),
@@ -133,7 +112,7 @@ class CsvStorletRdd(
       new CsvStorletPartition(i, boundaries(i)._1, boundaries(i)._2,
                               storletCsvCtx.getContainerName(),
                               storletCsvCtx.getObjectName(),
-                              storletCsvCtx.getStorletName())
+                              storletName)
     }).toArray
   }
 
@@ -154,10 +133,10 @@ class CsvStorletRdd(
 
     try {
       lower_iter = StorletCsvUtils.getCsvStorletOutput(sobject,
-                                                           thisPart.storletName,
-                                                           thisPart.index, thisPart.start, thisPart.end,
-                                                           maxRecordLen,
-                                                           selectedFields, whereClause)
+                                                       thisPart.storletName,
+                                                       thisPart.index, thisPart.start, thisPart.end,
+                                                       maxRecordLen,
+                                                       selectedFields, whereClause)
     } catch {
       case e: Exception => {
         logWarning("Exception during getting partition iterator", e)
