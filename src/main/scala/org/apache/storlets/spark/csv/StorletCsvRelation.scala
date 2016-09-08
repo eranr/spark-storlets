@@ -13,6 +13,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 
 import org.apache.storlets.spark.StorletConf
+import org.apache.storlets.spark.ConfConstants
 import org.apache.storlets.spark.csv.{StorletCsvConf, StorletCsvContext}
 import org.apache.storlets.spark.csv.util.{ParseModes, TypeCast, InferSchema}
 
@@ -56,7 +57,7 @@ case class StorletCsvRelation protected[spark] (
   private def getStorletConf(): StorletConf = {
     val conf = sqlContext.sparkContext.getConf
     val sconf = new StorletCsvConf(conf, "512", delimiter, quote, escape, comment)
-    sconf.set("storlets.csv.storlet.name", conf.get("storlets.csv.storlet.name", "partitionsidentitystorlet-1.0.jar"))
+    sconf.set(ConfConstants.STORLET_NAME, conf.get(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar"))
   }
 
   private def tokenRdd(header: Array[String],

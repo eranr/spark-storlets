@@ -25,6 +25,7 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
 import org.apache.storlets.spark.StorletConf
+import org.apache.storlets.spark.ConfConstants
 import org.apache.storlets.spark.csv.StorletCsvContext
 
 import org.javaswift.joss.model.StoredObject;
@@ -63,12 +64,12 @@ class CsvStorletRdd(
     whereClause: String)(@transient val storletCsvCtx: StorletCsvContext)
   extends RDD[String](sc, Nil) with Logging {
 
-  private val delimiter = sconf.get("storlets.csv.delimiter");
-  private val comment = sconf.get("storlets.csv.comment").head;
-  private val quote = sconf.get("storlets.csv.quote").head;
-  private val escape = sconf.get("storlets.csv.escape").head;
-  private val maxRecordLen = sconf.get("storlets.csv.max_record_len").toInt
-  private val storletName = sconf.get("storlets.csv.storlet.name")
+  private val delimiter = sconf.get(ConfConstants.STORLETS_CSV_DELIMITER);
+  private val comment = sconf.get(ConfConstants.STORLETS_CSV_COMMENT).head;
+  private val quote = sconf.get(ConfConstants.STORLETS_CSV_QUOTE).head;
+  private val escape = sconf.get(ConfConstants.STORLETS_CSV_ESCAPE).head;
+  private val maxRecordLen = sconf.get(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN).toInt
+  private val storletName = sconf.get(ConfConstants.STORLET_NAME)
 
   def numPartitions(chunkSize: Int,
                     objectDataSize: Long) : Int = {
@@ -96,11 +97,11 @@ class CsvStorletRdd(
   override def getPartitions: Array[Partition] = {
     val objectDataSize: Long = storletCsvCtx.getObjectSize() - storletCsvCtx.getFirstLine().getOffset()
 
-    val partitioningMethod: String = sconf.get("swift.storlets.partitioning.method")
-    val partitions = if (partitioningMethod == "partitions")
-      sconf.get("swift.storlets.partitioning.partitions").toInt
+    val partitioningMethod: String = sconf.get(ConfConstants.STORLETS_PARTITIONING_METHOD)
+    val partitions = if (partitioningMethod == ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS)
+      sconf.get(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY).toInt
     else {
-      var chunkSize: Int = 1024*1024*sconf.get("swift.storlets.partitioning.chunksize").toInt
+      var chunkSize: Int = 1024*1024*sconf.get(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY).toInt
       numPartitions(chunkSize,
                     objectDataSize)
     }

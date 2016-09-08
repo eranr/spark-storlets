@@ -26,6 +26,7 @@ import org.scalatest._
 import scala.io.Source
 
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.storlets.spark.ConfConstants;
 
 import org.javaswift.joss.client.factory.AccountConfig;
 import org.javaswift.joss.client.factory.AccountFactory;
@@ -57,10 +58,10 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     props.load(new FileInputStream(url.getFile()))
 
     val config = new AccountConfig();
-    config.setUsername(props.getProperty("joss.account.user"));
-    config.setPassword(props.getProperty("joss.account.password"));
-    config.setAuthUrl(props.getProperty("joss.auth.url"));
-    config.setTenantName(props.getProperty("joss.account.tenant"));
+    config.setUsername(props.getProperty(ConfConstants.SWIFT_USER));
+    config.setPassword(props.getProperty(ConfConstants.SWIFT_PASSWORD));
+    config.setAuthUrl(props.getProperty(ConfConstants.SWIFT_AUTH_URL));
+    config.setTenantName(props.getProperty(ConfConstants.SWIFT_TENANT));
     config.setMock(false);
     account = new AccountFactory(config).createAccount();
 
@@ -87,16 +88,16 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     sparkConf = new SparkConf()
       .setAppName("StorletCsvRelationSuite")
       .setMaster("local[2]") // 2 threads, some parallelism
-      .set("swift.storlets.partitioning.method","partitions")
-      .set("swift.storlets.partitioning.partitions","3")
-      .set("storlets.swift.username", props.getProperty("joss.account.user"))
-      .set("storlets.swift.password", props.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", props.getProperty("joss.auth.url"))
-      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
-      .set("storlets.csv.delimiter", " ")
-      .set("storlets.csv.comment", "#")
-      .set("storlets.csv.quote", "'")
-      .set("storlets.csv.escape", "/");
+      .set(ConfConstants.STORLETS_PARTITIONING_METHOD, ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS)
+      .set(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY, "3")
+      .set(ConfConstants.SWIFT_USER, props.getProperty(ConfConstants.SWIFT_USER))
+      .set(ConfConstants.SWIFT_PASSWORD, props.getProperty(ConfConstants.SWIFT_PASSWORD))
+      .set(ConfConstants.SWIFT_AUTH_URL, props.getProperty(ConfConstants.SWIFT_AUTH_URL))
+      .set(ConfConstants.SWIFT_TENANT, props.getProperty(ConfConstants.SWIFT_TENANT))
+      .set(ConfConstants.STORLETS_CSV_DELIMITER, " ")
+      .set(ConfConstants.STORLETS_CSV_COMMENT, "#")
+      .set(ConfConstants.STORLETS_CSV_QUOTE, "'")
+      .set(ConfConstants.STORLETS_CSV_ESCAPE, "/");
 
   }
 
@@ -105,7 +106,7 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("StorletCsvRelation with csvstorlet-1.0.jar and partitions") {
-    sparkConf.set("storlets.csv.storlet.name", "csvstorlet-1.0.jar")
+    sparkConf.set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
     sc = new SparkContext(sparkConf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))
@@ -115,9 +116,9 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("StorletCsvRelation with csvstorlet-1.0.jar and chunks") {
-    sparkConf.set("storlets.csv.storlet.name", "csvstorlet-1.0.jar")
-      .set("swift.storlets.partitioning.method","chunks")
-      .set("swift.storlets.partitioning.chunksize","1")
+    sparkConf.set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
+      .set(ConfConstants.STORLETS_PARTITIONING_METHOD, ConfConstants.STORLETS_PARTITIONING_METHOD_CHUNKS)
+      .set(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY, "1")
     sc = new SparkContext(sparkConf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))

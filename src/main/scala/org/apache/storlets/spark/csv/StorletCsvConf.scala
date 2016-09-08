@@ -20,6 +20,7 @@ package org.apache.storlets.spark.csv;
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkConf
 import org.apache.storlets.spark.StorletConf
+import org.apache.storlets.spark.ConfConstants
 
 class StorletCsvConf(conf: SparkConf,
                      max_record_len: String,
@@ -28,10 +29,10 @@ class StorletCsvConf(conf: SparkConf,
                      escape: Character,
                      comment: Character) extends StorletConf(conf) {
   // The below are expected in every instance of Storlet CSV conf
-  settings.put("storlets.csv.header.maxoffset", conf.get("storlets.csv.header.maxoffset","1024"));
-  settings.put("storlets.csv.max_record_len", conf.get("storlets.csv.max_record_len",max_record_len))
-  settings.put("storlets.csv.delimiter",conf.get("storlets.csv.delimiter", delimiter.toString))
-  settings.put("storlets.csv.comment",conf.get("storlets.csv.comment", comment.toString))
-  settings.put("storlets.csv.quote",conf.get("storlets.csv.quote", quote.toString))
-  settings.put("storlets.csv.escape",conf.get("storlets.csv.escape", escape.toString))
+  settings.put(ConfConstants.STORLETS_CSV_MAX_OFFSET, conf.get(ConfConstants.STORLETS_CSV_MAX_OFFSET, "1024"));
+  settings.put(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, conf.get(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, max_record_len))
+  settings.put(ConfConstants.STORLETS_CSV_DELIMITER, conf.get(ConfConstants.STORLETS_CSV_DELIMITER, delimiter.toString))
+  settings.put(ConfConstants.STORLETS_CSV_COMMENT, conf.get(ConfConstants.STORLETS_CSV_COMMENT, comment.toString))
+  settings.put(ConfConstants.STORLETS_CSV_QUOTE, conf.get(ConfConstants.STORLETS_CSV_QUOTE, quote.toString))
+  settings.put(ConfConstants.STORLETS_CSV_ESCAPE, conf.get(ConfConstants.STORLETS_CSV_ESCAPE, escape.toString))
 }

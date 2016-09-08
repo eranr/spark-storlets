@@ -42,6 +42,7 @@ import org.javaswift.joss.headers.object.range.FirstPartRange;
 
 import org.apache.spark.SparkConf;
 import org.apache.storlets.spark.csv.StorletCsvConf;
+import org.apache.storlets.spark.ConfConstants;
 
 public class CsvClientUtilSuite {
 
@@ -66,21 +67,21 @@ public class CsvClientUtilSuite {
     }
 
     SparkConf conf = new SparkConf()
-      .set("storlets.swift.username", m_prop.getProperty("joss.account.user"))
-      .set("storlets.swift.password", m_prop.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", m_prop.getProperty("joss.auth.url"))
-      .set("storlets.swift.tenantname", m_prop.getProperty("joss.account.tenant"))
-      .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
-      .set("swift.storlets.partitioning.method","partitions")
-      .set("swift.storlets.partitioning.partitions","5");
+      .set(ConfConstants.SWIFT_USER, m_prop.getProperty(ConfConstants.SWIFT_USER))
+      .set(ConfConstants.SWIFT_PASSWORD, m_prop.getProperty(ConfConstants.SWIFT_PASSWORD))
+      .set(ConfConstants.SWIFT_AUTH_URL, m_prop.getProperty(ConfConstants.SWIFT_AUTH_URL))
+      .set(ConfConstants.SWIFT_TENANT, m_prop.getProperty(ConfConstants.SWIFT_TENANT))
+      .set(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar")
+      .set(ConfConstants.STORLETS_PARTITIONING_METHOD, ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS)
+      .set(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY, "5");
 
     m_sconf = new StorletCsvConf(conf, "80",',','#', "'".charAt(0), '/');
 
     AccountConfig config = new AccountConfig();
-    config.setUsername(m_prop.getProperty("joss.account.user"));
-    config.setPassword(m_prop.getProperty("joss.account.password"));
-    config.setAuthUrl(m_prop.getProperty("joss.auth.url"));
-    config.setTenantName(m_prop.getProperty("joss.account.tenant"));
+    config.setUsername(m_prop.getProperty(ConfConstants.SWIFT_USER));
+    config.setPassword(m_prop.getProperty(ConfConstants.SWIFT_PASSWORD));
+    config.setAuthUrl(m_prop.getProperty(ConfConstants.SWIFT_AUTH_URL));
+    config.setTenantName(m_prop.getProperty(ConfConstants.SWIFT_TENANT));
     config.setMock(false);
     m_account = new AccountFactory(config).createAccount();
 

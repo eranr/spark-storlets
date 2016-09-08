@@ -26,30 +26,31 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkConf
 
+
 class StorletConf(conf: SparkConf) extends Cloneable with Serializable {
 
   private[storlets] val settings = new ConcurrentHashMap[String, String]()
 
   // The below are expected in every instance of Storlet conf
-  val partitioningMethod: String = conf.getOption("swift.storlets.partitioning.method")
-    .getOrElse(throw new NoSuchElementException("swift.storlets.partitioning.method"))
-  settings.put("swift.storlets.partitioning.method", partitioningMethod)
+  val partitioningMethod: String = conf.getOption(ConfConstants.STORLETS_PARTITIONING_METHOD)
+    .getOrElse(throw new NoSuchElementException(ConfConstants.STORLETS_PARTITIONING_METHOD))
+  settings.put(ConfConstants.STORLETS_PARTITIONING_METHOD, partitioningMethod)
 
-  if (partitioningMethod == "partitions") {
-    val partitions: String = conf.getOption("swift.storlets.partitioning.partitions")
-      .getOrElse(throw new NoSuchElementException("swift.storlets.partitioning.partitions"))
-    settings.put("swift.storlets.partitioning.partitions", partitions)
-  } else if (partitioningMethod == "chunks") {
+  if (partitioningMethod == ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS) {
+    val partitions: String = conf.getOption(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY)
+      .getOrElse(throw new NoSuchElementException(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY))
+    settings.put(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY, partitions)
+  } else if (partitioningMethod == ConfConstants.STORLETS_PARTITIONING_METHOD_CHUNKS) {
     // chunksize is given in MB
-    val chunkSize: String = conf.getOption("swift.storlets.partitioning.chunksize")
-      .getOrElse(throw new NoSuchElementException("swift.storlets.partitioning.chunksize"))
-    settings.put("swift.storlets.partitioning.chunksize", chunkSize)
+    val chunkSize: String = conf.getOption(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY)
+      .getOrElse(throw new NoSuchElementException(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY))
+    settings.put(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY, chunkSize)
   } else throw new IllegalArgumentException(partitioningMethod)
 
-  settings.put("storlets.swift.username", conf.get("storlets.swift.username"))
-  settings.put("storlets.swift.password", conf.get("storlets.swift.password"))
-  settings.put("storlets.swift.auth.url", conf.get("storlets.swift.auth.url"))
-  settings.put("storlets.swift.tenantname", conf.get("storlets.swift.tenantname"))
+  settings.put(ConfConstants.SWIFT_USER, conf.get(ConfConstants.SWIFT_USER))
+  settings.put(ConfConstants.SWIFT_PASSWORD, conf.get(ConfConstants.SWIFT_PASSWORD))
+  settings.put(ConfConstants.SWIFT_AUTH_URL, conf.get(ConfConstants.SWIFT_AUTH_URL))
+  settings.put(ConfConstants.SWIFT_TENANT, conf.get(ConfConstants.SWIFT_TENANT))
 
   def set(key: String, value: String): StorletConf = {
     if (key == null) {

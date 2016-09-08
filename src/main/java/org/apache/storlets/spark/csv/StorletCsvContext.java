@@ -28,6 +28,7 @@ import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.headers.object.range.FirstPartRange;
 
 import org.apache.storlets.spark.StorletConf;
+import org.apache.storlets.spark.ConfConstants;
 
 /*
  * This class holds the necessary infomation relevant for
@@ -60,8 +61,8 @@ public class StorletCsvContext {
    */
   public StorletCsvContext(StorletConf conf,
                            String objPath) {
-    this.maxOffset = Integer.parseInt(conf.get("storlets.csv.header.maxoffset"));
-    this.comment = conf.get("storlets.csv.comment").charAt(0);
+    this.maxOffset = Integer.parseInt(conf.get(ConfConstants.STORLETS_CSV_MAX_OFFSET));
+    this.comment = conf.get(ConfConstants.STORLETS_CSV_COMMENT).charAt(0);
 
     try {
         account = StorletCsvUtils.getAccount(conf);

@@ -31,6 +31,7 @@ import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.headers.object.range.AbstractRange;
 
 import org.apache.storlets.spark.StorletConf;
+import org.apache.storlets.spark.ConfConstants;
 
 public class StorletCsvUtils {
 
@@ -42,10 +43,10 @@ public class StorletCsvUtils {
 
   public static Account getAccount(StorletConf conf) throws StorletCsvException {
     AccountConfig config = new AccountConfig();
-    config.setUsername(conf.get("storlets.swift.username"));
-    config.setPassword(conf.get("storlets.swift.password"));
-    config.setAuthUrl(conf.get("storlets.swift.auth.url"));
-    config.setTenantName(conf.get("storlets.swift.tenantname"));
+    config.setUsername(conf.get(ConfConstants.SWIFT_USER));
+    config.setPassword(conf.get(ConfConstants.SWIFT_PASSWORD));
+    config.setAuthUrl(conf.get(ConfConstants.SWIFT_AUTH_URL));
+    config.setTenantName(conf.get(ConfConstants.SWIFT_TENANT));
     Account account = new AccountFactory(config).createAccount();
     if (account == null)
       throw malformedPath("Failed to get account");

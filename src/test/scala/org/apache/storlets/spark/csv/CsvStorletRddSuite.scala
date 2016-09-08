@@ -34,6 +34,7 @@ import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.StoredObject;
 
 import org.apache.storlets.spark.csv.{StorletCsvContext, StorletCsvConf}
+import org.apache.storlets.spark.ConfConstants;
 
 class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var props: Properties = new Properties();
@@ -58,10 +59,10 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
     props.load(new FileInputStream(url.getFile()))
 
     val config = new AccountConfig();
-    config.setUsername(props.getProperty("joss.account.user"));
-    config.setPassword(props.getProperty("joss.account.password"));
-    config.setAuthUrl(props.getProperty("joss.auth.url"));
-    config.setTenantName(props.getProperty("joss.account.tenant"));
+    config.setUsername(props.getProperty(ConfConstants.SWIFT_USER));
+    config.setPassword(props.getProperty(ConfConstants.SWIFT_PASSWORD));
+    config.setAuthUrl(props.getProperty(ConfConstants.SWIFT_AUTH_URL));
+    config.setTenantName(props.getProperty(ConfConstants.SWIFT_TENANT));
     config.setMock(false);
     account = new AccountFactory(config).createAccount();
 
@@ -85,12 +86,12 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
 
   before {
     val conf = new SparkConf()
-      .set("storlets.swift.username", props.getProperty("joss.account.user"))
-      .set("storlets.swift.password", props.getProperty("joss.account.password"))
-      .set("storlets.swift.auth.url", props.getProperty("joss.auth.url"))
-      .set("storlets.swift.tenantname", props.getProperty("joss.account.tenant"))
-      .set("swift.storlets.partitioning.method","partitions")
-      .set("swift.storlets.partitioning.partitions","3")
+      .set(ConfConstants.SWIFT_USER, props.getProperty(ConfConstants.SWIFT_USER))
+      .set(ConfConstants.SWIFT_PASSWORD, props.getProperty(ConfConstants.SWIFT_PASSWORD))
+      .set(ConfConstants.SWIFT_AUTH_URL, props.getProperty(ConfConstants.SWIFT_AUTH_URL))
+      .set(ConfConstants.SWIFT_TENANT, props.getProperty(ConfConstants.SWIFT_TENANT))
+      .set(ConfConstants.STORLETS_PARTITIONING_METHOD, ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS)
+      .set(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY, "3")
     sconf = new StorletCsvConf(conf, "80", ',', '#', "'".head, '/')
   }
 
@@ -106,7 +107,7 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
 
     sc = new SparkContext(conf)
 
-    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLET_NAME,"partitionsidentitystorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     rdd.numPartitions(100, 12000) shouldBe 120
@@ -123,7 +124,7 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
       .setMaster("local[2]") // 2 threads, some parallelism
 
     sc = new SparkContext(conf)
-    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     var boundaries = rdd.partitionBoundaries(12, 0, 12000)
@@ -149,7 +150,7 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
     val conf = createConf
     sc = new SparkContext(conf)
 
-    sconf.set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     val partitions = rdd.getPartitions
@@ -168,8 +169,8 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
     val testFilePath = containerName + "/records.txt"
     val conf = createConf
     sc = new SparkContext(conf)
-    sconf.set("storlets.csv.max_record_len", "80")
-         .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, "80")
+         .set(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, testFilePath) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     assert(rdd.count === 52)
@@ -179,8 +180,8 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
     val testFile = "meter-small-1M.csv"
     val conf = createConf
     sc = new SparkContext(conf)
-    sconf.set("storlets.csv.max_record_len", "80")
-         .set("storlets.csv.storlet.name","partitionsidentitystorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, "80")
+         .set(ConfConstants.STORLET_NAME, "partitionsidentitystorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
     assert(rdd.count === 9305)
@@ -189,8 +190,8 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
   test("Test records reading from meter-1MB.csv") {
     val testFile = "meter-1M.csv"
     val conf = createConf
-    sconf.set("storlets.csv.max_record_len", "256")
-         .set("storlets.csv.storlet.name","csvstorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, "256")
+         .set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
     sc = new SparkContext(conf)
     val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile)
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "4,6", "EqualTo(6,FRA)")(storletCtx)
@@ -201,8 +202,8 @@ class CsvStorletRddSuite extends FunSuite with Matchers with BeforeAndAfter with
     val testFile = "meter-1M.csv"
     val conf = createConf
     sc = new SparkContext(conf)
-    sconf.set("storlets.csv.max_record_len", "256")
-         .set("storlets.csv.storlet.name","csvstorlet-1.0.jar")
+    sconf.set(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN, "256")
+         .set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
     val storletCtx = new StorletCsvContext(sconf, containerName + "/" + testFile) 
     var rdd: CsvStorletRdd = new CsvStorletRdd(sc, sconf, "", "")(storletCtx)
 
