@@ -27,19 +27,25 @@ Configure
 ---------
 
 Configuration keys without a default value are mandatory.
+Currently, the following CSV "configurables" are not yet supported
+and appear in the table so that their defaults are known.
+
+- delimiter
+- quote
+- escape
 
 | key | Description | Default Value |
 | --- | ----------- | ------------- |
 |swift.auth.username | Swift user | |
 |swift.auth.password | Swift user password | |
 |swift.auth.tenantname | Swift tenant | |
-|swift.auth.url | Keystone url pointing at Storlets enabled Swift cluster | |
+|swift.auth.url | Keystone url configured with a Storlets enabled Swift cluster endpoint | |
 |storlets.partitioning.method | Either "partitions" or "chunks" | |
 |storlets.partitioning.partitions | For partitions method specifies the number of required partitions | mandaory when method is partitions  |
-|storlets.partitioning.chunksize | For chunks method this specifies in MB the partition chunk size | mandatory when method is chunks |
-|storlets.storlet.name The storlet name to invoke | |
-|storlets.csv.max_record_len | The maximum length in bytes of a record in a line | |
+|storlets.partitioning.chunksize | For chunks method specifies the partition chunk size in MB | mandatory when method is chunks |
+|storlets.storlet.name The | storlet name to invoke | |
+|storlets.csv.max_record_len | The maximum length in bytes of a record in a line | 512 |
 |storlets.csv.max_offset | The maximum csv file offset in bytes that includes the csv header| 1024|
-|storlets.csv.delimiter| The csv delimiter | |
-|storlets.csv.quote | The csv quote character | |
-|storlets.csv.escape | The csv escape character | |
+|storlets.csv.delimiter| The csv delimiter | ',' |
+|storlets.csv.quote | The csv quote character | '"' |
+|storlets.csv.escape | The csv escape character | '/' |
