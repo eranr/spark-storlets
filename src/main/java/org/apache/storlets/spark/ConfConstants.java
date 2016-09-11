@@ -9,7 +9,7 @@ public class ConfConstants {
    * data as well as ability to execute storlets.
    * The tenant should reflect a Swift account that is ebabled to run storlets
    */
-  public static final String SWIFT_AUTH_PREFIX = "swift.auth";
+  public static final String SWIFT_AUTH_PREFIX = "spark.swift.auth";
 
   public static final String SWIFT_USER = SWIFT_AUTH_PREFIX + ".username";
   public static final String SWIFT_PASSWORD = SWIFT_AUTH_PREFIX + ".password";
@@ -20,7 +20,7 @@ public class ConfConstants {
   * Configuration parameters that are independent from the storlet
   * being used
   */
-  public static final String STORLETS_GENERAL_PREFIX = "storlets";
+  public static final String STORLETS_GENERAL_PREFIX = "spark.storlets";
 
  /*
   * Partitioning methods can be either:
@@ -29,7 +29,7 @@ public class ConfConstants {
   */
   public static final String STORLETS_PARTITIONING_METHOD_PARTITIONS = "partitions";
   public static final String STORLETS_PARTITIONING_METHOD_CHUNKS = "chunks";
-  public static final String STORLETS_PARTITIONING_PREFIX = ".partitioning";
+  public static final String STORLETS_PARTITIONING_PREFIX = STORLETS_GENERAL_PREFIX + ".partitioning";
   public static final String STORLETS_PARTITIONING_METHOD = STORLETS_PARTITIONING_PREFIX + ".method";
   public static final String STORLETS_PARTITIONING_PARTITIONS_KEY = STORLETS_PARTITIONING_PREFIX + ".partitions";
   public static final String STORLETS_PARTITIONING_CHUNKSIZE_KEY = STORLETS_PARTITIONING_PREFIX + ".chunksize";

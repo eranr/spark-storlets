@@ -4,7 +4,7 @@ version := "0.0.1"
 
 organization := "org.apache"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.10.5"
 
 name := "spark-storlets"
 
@@ -29,7 +29,6 @@ crossPaths := false
 
 libraryDependencies ++= Seq(
   "org.javaswift" % "joss" % "0.9.12",
-  "com.databricks" % "spark-csv_2.11" % "1.4.0",
   "org.apache.commons" % "commons-csv" % "1.1",
   "com.univocity" % "univocity-parsers" % "1.5.1",
   "org.slf4j" % "slf4j-api" % "1.7.5" % "provided",
@@ -62,28 +61,6 @@ publishTo := {
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 
-//pomExtra := (
-//  <url>https://github.com/databricks/spark-csv</url>
-//  <licenses>
-//    <license>
-//      <name>Apache License, Version 2.0</name>
-//      <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
-//      <distribution>repo</distribution>
-//    </license>
-//  </licenses>
-//  <scm>
-//    <url>git@github.com:databricks/spark-csv.git</url>
-//    <connection>scm:git:git@github.com:databricks/spark-csv.git</connection>
-//  </scm>
-//  <developers>
-//    <developer>
-//      <id>falaki</id>
-//      <name>Hossein Falaki</name>
-//      <url>http://www.falaki.net</url>
-//    </developer>
-//  </developers>
-//)
-
 parallelExecution in Test := false
 
 // Skip tests during assembly
@@ -93,26 +70,3 @@ ScoverageSbtPlugin.ScoverageKeys.coverageHighlighting := {
   if (scalaBinaryVersion.value == "2.10") false
   else true
 }
-
-// -- MiMa binary compatibility checks ------------------------------------------------------------
-
-//import com.typesafe.tools.mima.core._
-//import com.typesafe.tools.mima.plugin.MimaKeys.binaryIssueFilters
-//import com.typesafe.tools.mima.plugin.MimaKeys.previousArtifact
-//import com.typesafe.tools.mima.plugin.MimaPlugin.mimaDefaultSettings
-
-//mimaDefaultSettings ++ Seq(
-//  previousArtifact := Some("com.databricks" %% "spark-csv-pushdown" % "0.0.1"),
-//  binaryIssueFilters ++= Seq(
-    // These classes are not intended to be public interfaces:
-//    ProblemFilters.excludePackage("com.databricks.spark.csv.pushdown.CsvRelation"),
-//    ProblemFilters.excludePackage("com.databricks.spark.csv.util.InferSchema"),
-//    ProblemFilters.excludePackage("com.databricks.spark.sql.readers"),
-//    ProblemFilters.excludePackage("com.databricks.spark.csv.util.TypeCast"),
-    // We allowed the private `CsvRelation` type to leak into the public method signature:
-//    ProblemFilters.exclude[IncompatibleResultTypeProblem](
-//      "com.databricks.spark.csv.pushdown.DefaultSource.createRelation")
-//  )
-//)
-
-// ------------------------------------------------------------------------------------------------
