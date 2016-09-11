@@ -55,11 +55,11 @@ and appear in the table so that their defaults are known.
 
 ### Example
 
-The following is an example that can be used inside spark-defaults.conf
+The following is a spark-defaults.conf example. 
 Note that the mentioned storlet is just a sample one that does not really
-do any filtering, but rather just takes care of records thay break between
-partitions.
-A storlet that does CSV filtering at the source is coming soon!
+do any filtering. Rather it just takes care of records that break between
+partitions. A storlet that does CSV filtering at the source is coming soon
+to Openstack Storlets.
 
     spark.swift.auth.username			tester
     spark.swift.auth.password			testing	
@@ -80,11 +80,11 @@ A storlet that does CSV filtering at the source is coming soon!
 
 We give below a spark-shell usage example.
 
-Start by editing spark-defaults.conf adding spark-storlets as a jar:
+Start by editing spark-defaults.conf adding the spark-storlets assembly as a jar:
 
     spark.jars					/root/spark-storlets/target/spark-storlets-assembly-0.0.1.jar	
 
-The below is from within th eSpark shell:
+The below is from within the Spark shell:
 
     scala>  val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> "myobjects/meter-1M.csv", "header" -> "true"))
     df: org.apache.spark.sql.DataFrame = [date: string, index: string, sumHC: string, sumHP: string, vid: string, city: string, state: string, state_abbr: string, lat: string, long: string]
@@ -106,4 +106,4 @@ Notes:
 There are lots of things to do. Here are the topmost I can think of at this point
 
 1. Add multi object support using an RDD over the container
-2. Add additional RDD featuring a storlet that extracs data from binary data
+2. Add an additional RDD featuring a storlet that extracs data from binary data
