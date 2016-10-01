@@ -131,20 +131,3 @@ spark-defaults.conf
 
 - prefix. Optional. If the path points a container, all objects having the specified prefix will be processed
   If the path points to a single object, the prefix must not be specified.
-
-- delimiter. Optional. Default is ","
-
-- quote. Optional. Default is "\"
-
-- escape. Optional. Defaulr is "/"   
-
-- comment. Optional. Defaulr is "#"   
-
-1. "org.apache.storlets.spark.csv" is the package incuding the Storlets CSV relation that implements the "filteredScan" and "pruneFilteredScan" Data sources APIs
-2. The path key is a Swift path of the form container/object. Currently, we support a single object.
-
-## TODOs:
-There are lots of things to do. Here are the topmost I can think of at this point
-
-1. Add multi object support using an RDD over the container
-2. Add an additional RDD featuring a storlet that extracs data from binary data
