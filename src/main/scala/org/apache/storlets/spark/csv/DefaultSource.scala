@@ -31,7 +31,6 @@ class DefaultSource
   with SchemaRelationProvider {
 
   private def checkPath(parameters: Map[String, String]): String = {
-    //parameters.getOrElse("path", sys.error("'path' must be specified for Storlet CSV data."))
     parameters.getOrElse("path", throw new Exception("'path' must be specified for Storlet CSV data."))
   }
 
@@ -55,6 +54,7 @@ class DefaultSource
       schema: StructType): StorletCsvRelation = {
 
     val path = checkPath(parameters)
+    val prefix = parameters.getOrElse("prefix", "")
 
    /**
     * We divide the list of parameters below (taken from com.databricks.spark.csv)
@@ -100,7 +100,8 @@ class DefaultSource
 
     val parseMode = parameters.getOrElse("mode", "PERMISSIVE")
 
-    val useHeader = parameters.getOrElse("header", "false")
+    var useHeader = parameters.getOrElse("header", "false")
+    useHeader = "true" // We currently enforce header usage
     val headerFlag = if (useHeader == "true") {
       true
     } else if (useHeader == "false") {
@@ -154,6 +155,7 @@ class DefaultSource
     StorletCsvRelation(
       charset,
       path,
+      prefix,
       headerFlag,
       delimiter,
       quoteChar,

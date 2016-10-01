@@ -1,4 +1,6 @@
 /*
+ * Copyright 2016 itsonlyme
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +22,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.lang.IllegalArgumentException;
 
 import java.io.File;
 import java.io.BufferedReader;
@@ -121,31 +125,15 @@ public class CsvClientUtilSuite {
   }
 
   @Test
-  public void testStorletCsvUtilsNameGetters() {
-    Account account = null;
-    try {
-      account = StorletCsvUtils.getAccount(m_sconf);
-      Assert.assertNotNull(account);
-
-      String ac = StorletCsvUtils.getContainerName("a/b");
-      Assert.assertEquals(ac,"a");
-      String ob = StorletCsvUtils.getObjectName("a/b");
-      Assert.assertEquals(ob,"b");
-    } catch (Exception ex) {
-      Assert.assertNotNull(null);
-    }
-  }
-
-  @Test
-  public void testStorletCsvContext() {
+  public void testStorletCsvContext() throws StorletCsvException {
     uploadTestFile("cars.csv");  
     String path = String.format("%s/%s", m_containerName, "cars.csv");
-    StorletCsvContext ctx = new StorletCsvContext(m_sconf, path);
+    StorletCsvContext ctx = new StorletCsvContext(m_sconf, path, "");
     Assert.assertNotNull(ctx);
-    Assert.assertEquals("object size", 134, ctx.getObjectSize());
-    StorletCsvFirstLine line = ctx.getFirstLine();
-    Assert.assertEquals("first line text", "year,make,model,comment,blank", line.getLine());
-    Assert.assertEquals("first line offset", 30, line.getOffset());
+    StorletCsvObjectContext object = ctx.getObjects().get(0);
+    Assert.assertEquals("object size", 104, object.getSize());
+    Assert.assertEquals("first line text", "year,make,model,comment,blank", object.getFirstLine());
+    Assert.assertEquals("first line offset", 30, object.getStart());
   }
 
   @Test
@@ -201,4 +189,45 @@ public class CsvClientUtilSuite {
     }
     
   }
+
+  private void uploadTestFileEx(String fileName, String objectName) {
+    m_url = this.getClass().getResource("/");
+    String path = m_url.getFile() + "/" + fileName;
+    File f = new File(path);
+    StoredObject object = m_container.getObject(objectName);
+    object.uploadObject(f);
+    object.exists();
+  }
+
+  @Test
+  public void test_ctx_container() throws StorletCsvException {
+    String testFileName = "meter-1M.csv";
+    uploadTestFileEx(testFileName, "object11");
+    uploadTestFileEx(testFileName, "object12");
+    uploadTestFileEx(testFileName, "object13");
+    uploadTestFileEx(testFileName, "object21");
+    uploadTestFileEx(testFileName, "object22");
+    StorletCsvContext ctx = new StorletCsvContext(m_sconf, m_containerName, "");
+    Assert.assertEquals(ctx.getObjects().size(), 5);
+  }
+
+  @Test
+  public void test_ctx_prefix() throws StorletCsvException {
+    String testFileName = "meter-1M.csv";
+    uploadTestFileEx(testFileName, "object11");
+    uploadTestFileEx(testFileName, "object12");
+    uploadTestFileEx(testFileName, "object13");
+    uploadTestFileEx(testFileName, "object21");
+    uploadTestFileEx(testFileName, "object22");
+    StorletCsvContext ctx = new StorletCsvContext(m_sconf, m_containerName, "object1"); 
+    Assert.assertEquals(ctx.getObjects().size(), 3);
+  }
+
+  @Test(expected=IllegalArgumentException.class)
+  public void test_ctx_prefix_object() throws StorletCsvException {
+    String testFileName = "meter-1M.csv";
+    String path = String.format("%s/%s", m_containerName, testFileName);
+    StorletCsvContext ctx = new StorletCsvContext(m_sconf, path, "object1"); 
+  }
+
 }

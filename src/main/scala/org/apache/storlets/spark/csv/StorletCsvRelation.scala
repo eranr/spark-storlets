@@ -20,6 +20,7 @@ import org.apache.storlets.spark.csv.util.{ParseModes, TypeCast, InferSchema}
 case class StorletCsvRelation protected[spark] (
     charset: String, 
     location: String,
+    prefix: String,
     useHeader: Boolean,
     delimiter: Char,
     quote: Character,
@@ -47,7 +48,8 @@ case class StorletCsvRelation protected[spark] (
 
   private val storletConf = getStorletConf
   @transient private val storletCsvCtx = new StorletCsvContext(storletConf,
-                                                               location)
+                                                               location,
+                                                               prefix)
 
   val defaultCsvFormat =
     CSVFormat.DEFAULT.withRecordSeparator(System.getProperty("line.separator", "\n"))
@@ -251,7 +253,7 @@ case class StorletCsvRelation protected[spark] (
    * Returns the first line of the file
    */
   private lazy val firstLine = {
-    storletCsvCtx.getFirstLine().getLine().split(delimiter.toString())
+    storletCsvCtx.getFirstLine().split(delimiter.toString())
   }
 
 }

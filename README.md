@@ -19,8 +19,21 @@ On a fresh Ubuntu 14.04, one has to first do:
 
 ## Running the tests
 
+To run the entire tests suite you will need access to Swift with Stotlets.
+The easiest way to do so, is using swift storelts all in one (A.K.A s2aio).
+Please refer to http://storlets.readthedocs.io/en/latest/getting_started.html
+for the s2aio installation.
+
+Once installed follow the below steps to run the tests:
+
 1. Edit src/test/resources/joss.properties and change the parameters
-   according to your setup.
+   according to your setup. If you are using s2aio, then use:
+
+  - user name: tester
+  - password: testing
+  - account name: test
+  - auth url: http://<s2aio host>:5000/v2.0/tokens
+
 2. run sbt/sbt test from the repository root directory
 
 ## Configure
@@ -28,6 +41,14 @@ On a fresh Ubuntu 14.04, one has to first do:
 ### Configuration keys
 
 Configuration keys without a default value are mandatory.
+Note that the keys are divided into 3 sets:
+
+1. Swift credentials
+
+2. Partitioning configuration
+
+3. CSV parsing configuration
+
 Currently, the following CSV "configurables" are not yet supported
 and appear in the table so that their defaults are known.
 
@@ -45,7 +66,7 @@ and appear in the table so that their defaults are known.
 |spark.storlets.partitioning.method | Either "partitions" or "chunks" | |
 |spark.storlets.partitioning.partitions | For partitions method specifies the number of required partitions | mandaory when method is partitions  |
 |spark.storlets.partitioning.chunksize | For chunks method specifies the partition chunk size in MB | mandatory when method is chunks |
-|spark.storlets.storlet.name The | storlet name to invoke | |
+|spark.storlets.storlet.name | The storlet name to invoke | |
 |spark.storlets.csv.max_record_len | The maximum length in bytes of a record in a line | 512 |
 |spark.storlets.csv.max_offset | The maximum csv file offset in bytes that includes the csv header| 1024|
 |spark.storlets.csv.delimiter| The csv delimiter | ',' |
@@ -86,7 +107,7 @@ Start by editing spark-defaults.conf adding the spark-storlets assembly as a jar
 
 The below is from within the Spark shell:
 
-    scala>  val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> "myobjects/meter-1M.csv", "header" -> "true"))
+    scala>  val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> "myobjects/meter-1M.csv"))
     df: org.apache.spark.sql.DataFrame = [date: string, index: string, sumHC: string, sumHP: string, vid: string, city: string, state: string, state_abbr: string, lat: string, long: string]
 
     scala> df.registerTempTable("data")
@@ -97,7 +118,27 @@ The below is from within the Spark shell:
     scala> res.collectAsList()
     res1: java.util.List[org.apache.spark.sql.Row] = [[1070]]
 
-Notes:
+# The org.apache.storlets.spark.csv Class
+
+The org.apache.storlets.spark.csv is a relation provider with schema.
+Belows is a list of configurables the relation accepts in the provided map.
+Note that any key provided via the map takes precedence over the global configurations in
+spark-defaults.conf
+
+- path. The path is mandatory, and can point either to a specific object or to a container.
+  If pointing to the specfic object the path has to be of the form: <container>/<object>.
+  If pointing a container that path has to be of the form: <container>
+
+- prefix. Optional. If the path points a container, all objects having the specified prefix will be processed
+  If the path points to a single object, the prefix must not be specified.
+
+- delimiter. Optional. Default is ","
+
+- quote. Optional. Default is "\"
+
+- escape. Optional. Defaulr is "/"   
+
+- comment. Optional. Defaulr is "#"   
 
 1. "org.apache.storlets.spark.csv" is the package incuding the Storlets CSV relation that implements the "filteredScan" and "pruneFilteredScan" Data sources APIs
 2. The path key is a Swift path of the form container/object. Currently, we support a single object.

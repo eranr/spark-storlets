@@ -1,4 +1,6 @@
 /*
+ * Copyright 2016 itsonlyme
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,7 +19,9 @@
 
 package org.apache.storlets.spark.csv;
 
+import java.util.NoSuchElementException
 import scala.collection.JavaConversions._
+import scala.collection.mutable.ListBuffer
 
 import org.apache.spark.{InterruptibleIterator, Logging, Partition, SparkContext, TaskContext}
 import org.apache.spark.annotation.DeveloperApi
@@ -26,16 +30,24 @@ import org.apache.spark.rdd.RDD
 
 import org.apache.storlets.spark.StorletConf
 import org.apache.storlets.spark.ConfConstants
-import org.apache.storlets.spark.csv.StorletCsvContext
+import org.apache.storlets.spark.csv.{StorletCsvContext, StorletCsvObjectContext}
 
 import org.javaswift.joss.model.StoredObject;
 
-private[storlets] class CsvStorletPartition(idx: Int, val start: Long, val end: Long,
-                                            val containerName: String,
-                                            val objectName: String,
-                                            val storletName: String) extends Partition {
+@SerialVersionUID(100L)
+private[storlets] class CsvStorletPartitionEntry(val firstPartition: Boolean,
+                                                 val start: Long, val end: Long,
+                                                 val containerName: String,
+                                                 val objectName: String) extends Serializable {
+}
+
+/*
+ * Ideally we would have passed here a StoredObject instance instead of all its fields...
+ * However, it is most likely not serializable.
+ */
+private[storlets] class CsvStorletPartition(idx: Int, val storletName: String) extends Partition {
   override def index: Int = idx;
-  def firstPartition: Boolean = if (index == 0) true else false;
+  var entries = new ListBuffer[CsvStorletPartitionEntry]()
 }
 
 /**
@@ -70,117 +82,149 @@ class CsvStorletRdd(
   private val escape = sconf.get(ConfConstants.STORLETS_CSV_ESCAPE).head;
   private val maxRecordLen = sconf.get(ConfConstants.STORLETS_CSV_MAX_RECORD_LEN).toInt
   private val storletName = sconf.get(ConfConstants.STORLET_NAME)
+  private val minDataChunk = 10 * maxRecordLen
 
-  def numPartitions(chunkSize: Int,
-                    objectDataSize: Long) : Int = {
-    val partByChunkSize_ = (objectDataSize / chunkSize).toInt
-    var partByChunkSize: Int = if (objectDataSize % chunkSize == 0) partByChunkSize_ else partByChunkSize_ + 1
-    partByChunkSize
+  def createAndPopulatePartitionsBySize(totalSize: Long,
+                                        partitionDataSize: Long,
+                                        objectsCtx: java.util.List[StorletCsvObjectContext]): ListBuffer[Partition] = {
+    var partitions = new ListBuffer[Partition]() 
+    var partitionIdx: Int = 0
+    var csvStorletPartition: CsvStorletPartition = new CsvStorletPartition(partitionIdx, storletName)
+    partitions.add(csvStorletPartition)
+    var partitionSpaceLeft: Long = partitionDataSize
+    var totalDataLeft: Long = totalSize
+    for (objectCtx <- objectsCtx) {
+      var objectDataLeft: Long = objectCtx.getSize()
+      var objectPointer: Long = objectCtx.getStart()
+      var firstObjectPart: Boolean = true
+      //while (objectDataLeft > 0 && partitionIdx < numPartitions) {
+      while (objectDataLeft > 0 && totalDataLeft > 0) {
+        csvStorletPartition = partitions(partitionIdx).asInstanceOf[CsvStorletPartition]
+        var dataFromObject: Long = math.min(objectDataLeft, partitionSpaceLeft)
+        // Make sure we do not leave too little to read.
+        if (objectDataLeft - dataFromObject < minDataChunk) dataFromObject = objectDataLeft
+        val start = objectPointer
+        val end = objectPointer + dataFromObject - 1 
+        csvStorletPartition.entries.add(new CsvStorletPartitionEntry(firstObjectPart,
+                                                                     objectPointer, objectPointer + dataFromObject - 1,
+                                                                     objectCtx.getContainerName(), objectCtx.getObjectName))
+        objectDataLeft -= dataFromObject
+        totalDataLeft -= dataFromObject
+        partitionSpaceLeft -= dataFromObject
+        objectPointer = objectPointer + dataFromObject
+        firstObjectPart = false
+        if (partitionSpaceLeft <= minDataChunk && totalDataLeft > 0) {
+          partitionIdx += 1
+          csvStorletPartition = new CsvStorletPartition(partitionIdx, storletName)
+          partitions.add(csvStorletPartition)
+          partitionSpaceLeft = partitionDataSize
+        }
+      }
+    }
+    partitions
   }
 
-  def partitionBoundaries(numPartitions: Int,
-                          firstLineOffset: Int,
-                          objectSize: Long): Array[(Long, Long)] = {
-    val boundaries = new Array[(Long, Long)](numPartitions)
-    val totalData = objectSize - firstLineOffset
-    val partitionSize  = totalData / numPartitions
-    val residue = totalData % numPartitions
-    var start: Long = firstLineOffset.toLong
-    for (i  <- 0 to numPartitions - 2) {
-      boundaries(i) = (start, start + partitionSize - 1)
-      start = start + partitionSize
-    }
-    boundaries(numPartitions-1) = (start, start + partitionSize -1 + residue)
-    boundaries
+  def getFixedPartitions(totalSize: Long, numPartitions: Int, objectsCtx: java.util.List[StorletCsvObjectContext]): Array[Partition] = {
+    /* We think of the partitions as a fixed number buckets to which we start allocate object "splits". The object "splits"
+     * are calculated as follows:
+     * Denote partitionDataSize as the size each partition needs to deal with. This is basically rounding up the division
+     * of partitionDataSize by (numPartitions + 1)
+     * We now iterate over all objects, starting to fill the buckets, moving to the next bucket when the previous one is full.
+     */
+    val partitionDataSize: Long = math.ceil(totalSize / numPartitions).toLong
+    if (partitionDataSize < minDataChunk)
+      throw new java.lang.IllegalArgumentException("Resulting partition size is too small");
+    var partitions = createAndPopulatePartitionsBySize(totalSize, partitionDataSize, objectsCtx)
+    partitions.toArray
+  }
+
+  def getChunkPartitions(totalSize: Long, chunkSize: Int,  objectsCtx: java.util.List[StorletCsvObjectContext]): Array[Partition] = {
+    if (chunkSize < minDataChunk)
+      throw new java.lang.IllegalArgumentException("Chunk size is too small");
+    val partitionDataSize: Long = chunkSize.toLong
+    var partitions = createAndPopulatePartitionsBySize(totalSize, partitionDataSize, objectsCtx)
+    partitions.toArray
   }
 
   override def getPartitions: Array[Partition] = {
-    val objectDataSize: Long = storletCsvCtx.getObjectSize() - storletCsvCtx.getFirstLine().getOffset()
-
+    val objectsCtx = storletCsvCtx.getObjects()
+    var totalDataSize: Long = 0
+    for (objectCtx <- objectsCtx) totalDataSize += objectCtx.getSize()
+ 
     val partitioningMethod: String = sconf.get(ConfConstants.STORLETS_PARTITIONING_METHOD)
-    val partitions = if (partitioningMethod == ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS)
-      sconf.get(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY).toInt
-    else {
+    if (partitioningMethod == ConfConstants.STORLETS_PARTITIONING_METHOD_PARTITIONS) {
+      val numPartitions: Int = sconf.get(ConfConstants.STORLETS_PARTITIONING_PARTITIONS_KEY).toInt
+      getFixedPartitions(totalDataSize, numPartitions, objectsCtx)
+    } else {
       var chunkSize: Int = 1024*1024*sconf.get(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY).toInt
-      numPartitions(chunkSize,
-                    objectDataSize)
+      getChunkPartitions(totalDataSize, chunkSize, objectsCtx)
     }
-    
+
+
+   /* 
     val boundaries = partitionBoundaries(partitions,
-                                         storletCsvCtx.getFirstLine().getOffset(),
-                                         storletCsvCtx.getObjectSize())
+                                         objectCtx.getStart(),
+                                         objectCtx.getEnd())
     (0 until boundaries.length).map(i => {
       new CsvStorletPartition(i, boundaries(i)._1, boundaries(i)._2,
-                              storletCsvCtx.getContainerName(),
-                              storletCsvCtx.getObjectName(),
+                              containerName,
+                              objectName,
                               storletName)
     }).toArray
+    */
   }
 
   override def compute(thePart: Partition, context: TaskContext): InterruptibleIterator[String] = {
     val thisPart = thePart.asInstanceOf[CsvStorletPartition]
-    var sobject: StoredObject = null
-    var lower_iter: StorletCsvOutputIterator = null
     var counter: Int = 0
+    logInfo("Index: " + thisPart.index);
 
-    logInfo("Index: "+thisPart.index+" start " + thisPart.start + " end " + thisPart.end);
-    try {
-      sobject = StorletCsvUtils.getStoredObject(sconf, thisPart.objectName, thisPart.containerName)
-    } catch {
-      case e: Exception => {
-        logWarning("Exception during getting partition object range", e)
-      }
-    }
-
-    try {
-      lower_iter = StorletCsvUtils.getCsvStorletOutput(sobject,
-                                                       thisPart.storletName,
-                                                       thisPart.index, thisPart.start, thisPart.end,
-                                                       maxRecordLen,
-                                                       selectedFields, whereClause)
-    } catch {
-      case e: Exception => {
-        logWarning("Exception during getting partition iterator", e)
-      }
-    }
-
-    val iter = new Iterator[String]{
-      override def hasNext: Boolean = {
-        try {
-          val has = lower_iter.hasNext()
-          if (has == false) {
-            logInfo(s"hasNext returning false. So far yielded ${counter} lines")
-          }
-          has
-        } catch {
-          case e: Exception => {
-            logWarning("Exception during hasNext", e)
-            lower_iter.close();
-            false
-          }
+    case class objectIterator(entry: CsvStorletPartitionEntry) extends Iterator[String] {
+      logInfo(" start " + entry.start + " end " + entry.end + " container " + entry.containerName + " object " + entry.objectName);
+      var object_iter: StorletCsvOutputIterator = null
+      var sobject: StoredObject = null
+      try {
+        sobject = StorletCsvUtils.getStoredObject(sconf, entry.objectName, entry.containerName)
+      } catch {
+        case e: Exception => {
+          logWarning("Exception during getting partition object range", e)
         }
       }
 
-      override def next(): String = {
+      try {
+        object_iter = StorletCsvUtils.getCsvStorletOutput(sobject,
+                                                         thisPart.storletName,
+                                                         thisPart.index, entry.start, entry.end,
+                                                         maxRecordLen,
+                                                         selectedFields, whereClause)
+      } catch {
+        case e: Exception => {
+          logWarning("Exception during getting partition iterator", e)
+        }
+      }
+
+      def hasNext = object_iter.hasNext()
+
+      def next() = {
         var line: String = null
         try {
-          line = lower_iter.next()
+          line = object_iter.next()
         } catch {
-          case e: Exception => {
-            logWarning("Exception during next", e)
-            lower_iter.close()
+          case e: java.util.NoSuchElementException => {
+            object_iter.close()
           }
         }
-
         counter = counter + 1
         line
       }
 
-      def close() {
+      def close() = {
         logInfo(s"compute iterator closed after yielding ${counter} lines")
-        lower_iter.close()
+        object_iter.close()
       }
     }
-    new InterruptibleIterator(context, iter) 
+    val compound_iter = thisPart.entries.foldLeft(Iterator.empty.asInstanceOf[Iterator[String]])(
+      (iter: Iterator[String], entry: CsvStorletPartitionEntry) => iter ++ new objectIterator(entry))
+    new InterruptibleIterator(context, compound_iter)
   }
 }

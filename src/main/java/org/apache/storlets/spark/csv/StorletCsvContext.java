@@ -16,6 +16,9 @@
 
 package org.apache.storlets.spark.csv;
 
+import java.util.List;
+import java.util.Collection;
+import java.util.ArrayList;
 import java.io.InputStream;
 
 import org.slf4j.Logger;
@@ -36,10 +39,7 @@ import org.apache.storlets.spark.ConfConstants;
  * This information includes:
  * The object size required to determine the number of partitions
  * The first line of the object required for detemining the schema
- * At this point we support a single object
  *
- * TODO: Support multiple files.
- * Esp. how does databricks support this. Do they have a schema per file? 
  */
 public class StorletCsvContext {
 
@@ -48,50 +48,80 @@ public class StorletCsvContext {
   private Character comment;
   private Account account;
   private Container container;
-  private StoredObject sobject;
+  private List<StorletCsvObjectContext> ctxObjects;
   private StorletCsvFirstLine firstLine;
-  private long objectSize;
   private String containerName;
   private String objectName;
+  private String prefix;
   private int maxOffset;
 
-  /*
-   * objPath is assumed to be of the form containerName.objectName
-   * commant is a string containing the file's comment symbol
-   */
+ /*
+  * The object path can reflect
+  * A whole container
+  * An object
+  * A prefix cannot appear together with an object path and vice verca.
+  * A whole container can be represented as: string, /string, string/, /string/
+  * A container + object can be represented as: <container>/string([/string]*)[/]
+  *  where, <container> is any representation of container from above.
+  *  ([/string]*) is zero or more /string
+  *  [/] zero or more /
+  */ 
+  private String alignPath(String objPath) {
+    // Trim any leading or ending '/'
+    objPath = objPath.replaceAll("\\A[/]+","");
+    objPath = objPath.replaceAll("[/]+\\z","");
+
+    // Replace doube '/' with single '/'
+    objPath = objPath.replaceAll("//+","/");
+    return objPath;
+  }
+
+  private void parsePath(String objPath) {
+    objPath = alignPath(objPath);
+    String[] splitPath = objPath.split("/",2);
+    containerName = splitPath[0];
+    if (splitPath.length == 2) {
+      objectName = splitPath[1];
+    } else {
+      objectName = "";
+    }
+  }
+
   public StorletCsvContext(StorletConf conf,
-                           String objPath) {
+                           String objPath,
+                           String prefix) throws IllegalArgumentException, StorletCsvException {
+    this.prefix = prefix;
+    parsePath(objPath);
+    if (prefix != null && !prefix.isEmpty() && !objectName.isEmpty()) {
+      throw new IllegalArgumentException("Specifying both a prefix and an object is not allowed");
+    }
+
     this.maxOffset = Integer.parseInt(conf.get(ConfConstants.STORLETS_CSV_MAX_OFFSET));
     this.comment = conf.get(ConfConstants.STORLETS_CSV_COMMENT).charAt(0);
 
-    try {
-        account = StorletCsvUtils.getAccount(conf);
-        containerName = StorletCsvUtils.getContainerName(objPath);
-        objectName = StorletCsvUtils.getObjectName(objPath);
-        container = account.getContainer(containerName);
-        sobject = container.getObject(objectName);
-    } catch (StorletCsvException ex) {
-      log.error("Failed to create StorletCsvContext", ex);
-      return;
+    account = StorletCsvUtils.getAccount(conf);
+    container = account.getContainer(containerName);
+    ctxObjects = new ArrayList<StorletCsvObjectContext>();
+    if (!objectName.isEmpty()) {
+      ctxObjects.add(new StorletCsvObjectContext(container.getObject(objectName),
+                                                 comment,
+                                                 maxOffset));
+    } else {
+      Collection<StoredObject> objects = container.list(prefix,"",9999);
+      for (StoredObject object: objects) {
+        ctxObjects.add(new StorletCsvObjectContext(object,
+                                                   comment,
+                                                   maxOffset));
+      }
     }
-    DownloadInstructions downloadInstructions = new DownloadInstructions().
-      setRange(new FirstPartRange(maxOffset));
-
-    InputStream content = sobject.downloadObjectAsInputStream(downloadInstructions);
-    firstLine = StorletCsvUtils.getFirstLine(content, comment);
-    objectSize = sobject.getContentLength();
   }
 
-  public long getObjectSize() {
-    return objectSize;
+  public String getFirstLine() {
+    return ctxObjects.get(0).getFirstLine();
   }
 
-  public StorletCsvFirstLine getFirstLine() {
-    return firstLine;
-  }
-
-  public String getObjectName() {
-    return objectName;
+  public List<StorletCsvObjectContext> getObjects() {
+    return ctxObjects;
   }
 
   public String getContainerName() {

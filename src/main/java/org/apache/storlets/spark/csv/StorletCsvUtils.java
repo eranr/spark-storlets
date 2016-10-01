@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Collection;
 
 import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
@@ -59,26 +60,6 @@ public class StorletCsvUtils {
     Container container = account.getContainer(containerName);
     StoredObject sobject = container.getObject(objectName);
     return sobject;
-  }
-
-  public static String getContainerName(String objPath) throws StorletCsvException {
-    int i = objPath.indexOf("/");
-    if (i <= 0) {
-      throw malformedPath(objPath);
-    }
-    return objPath.substring(0, i);
-  }
-
-  public static String getObjectName(String objPath) throws StorletCsvException {
-    int i = objPath.indexOf("/");
-    if (i <= 0) {
-      throw malformedPath(objPath);
-    }
-    String objName = objPath.substring(i + 1);
-    if (objName.isEmpty()) {
-      throw malformedPath(objPath);
-    }
-    return objName;
   }
 
   public static StorletCsvFirstLine getFirstLine(InputStream is, Character comment) {

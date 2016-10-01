@@ -44,11 +44,11 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
   val testFileName = "meter-1M.csv"
   var sc: SparkContext = null
 
-  def uploadTestFile(name: String) {
+  def uploadTestFile(fileName: String, objectName: String) {
     val url = getClass.getResource("/")
-    val path = url.getFile() + "/" + name;
+    val path = url.getFile() + "/" + fileName;
     val f = new File(path);
-    val sobject = container.getObject(name);
+    val sobject = container.getObject(objectName);
     sobject.uploadObject(f);
     sobject.exists();
   }
@@ -71,7 +71,8 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     container.exists();
 
     // Upload file for tests
-    uploadTestFile(testFileName)
+    uploadTestFile(testFileName,testFileName)
+    uploadTestFile(testFileName,testFileName+'1')
 
     testFilePath = containerName + "/" + testFileName
 
@@ -105,14 +106,34 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
     sc.stop
   }
 
-  test("StorletCsvRelation with csvstorlet-1.0.jar and partitions") {
+  test("StorletCsvRelation with csvstorlet-1.0.jar and partitions single object") {
     sparkConf.set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
     sc = new SparkContext(sparkConf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))
+    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "delimiter" -> ","))
     df.registerTempTable("data")
     val res = sqlContext.sql("select count(vid) from data where (state like 'FRA')")
     assert(res.collectAsList()(0)(0) === 1070)
+  }
+
+  test("StorletCsvRelation with csvstorlet-1.0.jar and partitions multiple objects") {
+    sparkConf.set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
+    sc = new SparkContext(sparkConf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> containerName, "prefix" -> testFileName))
+    df.registerTempTable("data")
+    val res = sqlContext.sql("select count(vid) from data where (state like 'FRA')")
+    assert(res.collectAsList()(0)(0) === 2140)
+  }
+
+  test("StorletCsvRelation with csvstorlet-1.0.jar and partitions multiple objects empty prefix") {
+    sparkConf.set(ConfConstants.STORLET_NAME, "csvstorlet-1.0.jar")
+    sc = new SparkContext(sparkConf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> containerName))
+    df.registerTempTable("data")
+    val res = sqlContext.sql("select count(vid) from data where (state like 'FRA')")
+    assert(res.collectAsList()(0)(0) === 2140)
   }
 
   test("StorletCsvRelation with csvstorlet-1.0.jar and chunks") {
@@ -121,7 +142,7 @@ class StorletCsvRelationSuite extends FunSuite with Matchers with BeforeAndAfter
       .set(ConfConstants.STORLETS_PARTITIONING_CHUNKSIZE_KEY, "1")
     sc = new SparkContext(sparkConf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "header" -> "true", "delimiter" -> ","))
+    val df = sqlContext.load("org.apache.storlets.spark.csv", Map("path" -> testFilePath, "delimiter" -> ","))
     df.registerTempTable("data")
     val res = sqlContext.sql("select count(vid) from data where (state like 'FRA')")
     assert(res.collectAsList()(0)(0) === 1070)
